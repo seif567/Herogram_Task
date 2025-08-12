@@ -134,14 +134,30 @@ export default function DashboardPage() {
             // Only replace the number of placeholders that correspond to this batch
             const placeholdersToReplace = Math.min(res.length, sortedPlaceholders.length);
             const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
-                        
+            
+            console.log(`fetchPaintingsOnce: Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders`);
+            
             return [...res, ...placeholdersToKeep];
           }
           
-          return res || [];
+          // If we have real paintings but no placeholders, just return real paintings
+          if (res.length > 0) {
+            return res;
+          }
+          
+          // If no real paintings, keep existing placeholders
+          return prev;
         });
       } else {
-        setPaintings(res || []);
+        // Don't clear paintings if we have placeholders - they might still be processing
+        setPaintings(prev => {
+          const hasPlaceholders = prev.some((p: any) => p.id.toString().startsWith('placeholder-'));
+          if (hasPlaceholders) {
+            console.log('API returned no paintings, but keeping placeholders');
+            return prev;
+          }
+          return res || [];
+        });
       }
     } catch (err) {
       console.error('getPaintings error', err);
@@ -201,8 +217,13 @@ export default function DashboardPage() {
                 return [...realPaintings, ...placeholdersToKeep];
               }
               
-              // If no placeholders to replace, just return real paintings
-              return realPaintings;
+              // If we have real paintings but no placeholders, just return real paintings
+              if (realPaintings.length > 0) {
+                return realPaintings;
+              }
+              
+              // If no real paintings, keep existing placeholders
+              return prev;
             });
             
             // Check if all real paintings are completed (ignore placeholders)
@@ -212,6 +233,16 @@ export default function DashboardPage() {
               pollingRef.current = null;
               return;
             }
+          } else {
+            // If no real paintings returned, check if we have placeholders to preserve
+            setPaintings(prev => {
+              const hasPlaceholders = prev.some((p: any) => p.id.toString().startsWith('placeholder-'));
+              if (hasPlaceholders) {
+                console.log('Polling: No real paintings yet, keeping placeholders');
+                return prev;
+              }
+              return res || [];
+            });
           }
         } catch (err) {
           console.warn('poll error', err);
