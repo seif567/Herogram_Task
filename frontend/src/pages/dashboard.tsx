@@ -585,49 +585,121 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-bold mb-4">AI Image Generator</h2>
 
           {/* Reference Images */}
-          <section className="mb-6 bg-white p-4 rounded shadow">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Reference Images</h3>
-              <label className="flex items-center gap-2 text-sm">
-                <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2">
+          <section className="mb-6 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Reference Images
+                </h3>
+                <label className="flex items-center gap-3 text-sm cursor-pointer group">
+                <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ease-in-out focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2">
                   <input
                     type="checkbox"
                     checked={useGlobalRefs}
                     onChange={(e) => setUseGlobalRefs(e.target.checked)}
                     className="sr-only"
                   />
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    useGlobalRefs ? 'translate-x-6' : 'translate-x-1'
+                  {/* Track */}
+                  <span className={`inline-block h-6 w-11 rounded-full transition-all duration-300 ease-in-out ${
+                    useGlobalRefs 
+                      ? 'bg-blue-600 shadow-lg shadow-blue-200' 
+                      : 'bg-gray-200 border border-gray-300'
                   }`} />
-                  <span className={`inline-block h-6 w-11 rounded-full transition-colors ${
-                    useGlobalRefs ? 'bg-blue-600' : 'bg-gray-200'
+                  {/* Knob */}
+                  <span className={`absolute inline-block h-5 w-5 transform rounded-full transition-all duration-300 ease-in-out ${
+                    useGlobalRefs 
+                      ? 'translate-x-6 bg-white shadow-md' 
+                      : 'translate-x-0.5 bg-white shadow-sm border border-gray-200'
+                  }`} />
+                  {/* Inner circle indicator */}
+                  <span className={`absolute inline-block h-2 w-2 transform rounded-full transition-all duration-300 ease-in-out ${
+                    useGlobalRefs 
+                      ? 'translate-x-6 bg-blue-600' 
+                      : 'translate-x-1 bg-gray-400'
                   }`} />
                 </div>
-                <span className="text-sm font-medium text-gray-700">Use global references</span>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-200">
+                  Use global references
+                </span>
               </label>
+              </div>
             </div>
 
-            <div className="mt-3 border border-dashed border-gray-200 rounded p-6">
+            <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-6">
               <div className="flex flex-col items-center justify-center">
-                <p className="text-sm text-gray-500">Drop reference images here or</p>
-                <div className="mt-3">
-                  <input ref={fileRef} type="file" accept="image/*" onChange={handleUploadRef} />
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-gray-600 font-medium mb-2">Upload Reference Images</p>
+                <p className="text-xs text-gray-500 text-center mb-4">Drop images here or click to browse</p>
+                <div className="relative">
+                  <input 
+                    ref={fileRef} 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleUploadRef}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <button 
+                    type="button"
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow-md"
+                  >
+                    Choose Files
+                  </button>
                 </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-6">
                 {refsList.length === 0 ? (
-                  <p className="text-sm text-gray-400">No reference images uploaded</p>
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-400">No reference images uploaded yet</p>
+                    <p className="text-xs text-gray-300 mt-1">Upload images to use as style references</p>
+                  </div>
                 ) : (
-                  <div className="flex gap-2 overflow-auto mt-2">
-                    {refsList.map((r: any) => (
-                      <img key={r.id} src={r.image_data} alt="ref" className="w-28 h-20 object-cover rounded" />
-                    ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Reference Images ({refsList.length})</span>
+                      <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                        Active
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {refsList.map((r: any) => (
+                        <div key={r.id} className="relative group">
+                          <img 
+                            src={r.image_data} 
+                            alt="Reference" 
+                            className="w-full h-24 object-cover rounded-lg border border-gray-200 group-hover:border-blue-300 transition-colors duration-200" 
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded-lg flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="text-sm text-blue-800">
+                          <p className="font-medium">Reference images will be used</p>
+                          <p className="text-xs text-blue-600 mt-1">
+                            These {refsList.length} image(s) will influence the style and composition of your generated paintings
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <div className="mt-2 text-xs text-gray-500">
-                  {refsList.length > 0 ? `${refsList.length} reference image(s) will be used for generation` : ''}
-                </div>
               </div>
             </div>
           </section>
