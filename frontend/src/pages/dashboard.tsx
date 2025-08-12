@@ -29,6 +29,8 @@ export default function DashboardPage() {
   const [placeholderBatches, setPlaceholderBatches] = useState<Array<{count: number, timestamp: number}>>([]);
   // Store placeholder cards in localStorage for persistence across page reloads
   const [persistentPlaceholders, setPersistentPlaceholders] = useState<any[]>([]);
+  // Track the original expected count when generation starts
+  const [originalExpectedCount, setOriginalExpectedCount] = useState<number>(0);
 
   // left sidebar state
   const [titles, setTitles] = useState<Title[]>([]);
@@ -134,8 +136,8 @@ export default function DashboardPage() {
         setPaintings(prev => {
           const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
           
-          // Calculate the total expected cards (original placeholders)
-          const totalExpectedCards = prev.length;
+          // Use the original expected count from when generation started
+          const totalExpectedCards = originalExpectedCount;
           
           if (placeholderPaintings.length > 0 && res.length > 0) {
             // Sort placeholders by timestamp (oldest first)
@@ -251,8 +253,8 @@ export default function DashboardPage() {
               const realPaintings = res;
               const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
               
-              // Calculate the total expected cards (original placeholders)
-              const totalExpectedCards = prev.length;
+              // Use the original expected count from when generation started
+              const totalExpectedCards = originalExpectedCount;
               
               // If we have real paintings and placeholders, replace only the appropriate number
               if (realPaintings.length > 0 && placeholderPaintings.length > 0) {
@@ -363,6 +365,7 @@ export default function DashboardPage() {
     setActiveTitleId(null);
     setPaintings([]);
     setRefs([]);
+    setOriginalExpectedCount(0); // Reset expected count for new title
     
     // Stop any existing polling
     stopPolling();
@@ -371,6 +374,7 @@ export default function DashboardPage() {
   // select a title from sidebar
   async function handleSelectTitle(id: string | number) {
     setActiveTitleId(id);
+    setOriginalExpectedCount(0); // Reset expected count when switching titles
     // optionally load specific title details
     try {
       const t = await getTitle(id);
@@ -445,6 +449,9 @@ export default function DashboardPage() {
       
       return newPaintings;
     });
+    
+    // Set the original expected count for this generation batch
+    setOriginalExpectedCount(prev => prev + numImages);
     
     // Track this batch of placeholders
     setPlaceholderBatches(prev => [...prev, { count: numImages, timestamp: batchTimestamp }]);
@@ -566,6 +573,8 @@ export default function DashboardPage() {
       const key = `placeholders_${activeTitleId}`;
       localStorage.removeItem(key);
       setPersistentPlaceholders([]);
+      // Reset the expected count since all placeholders are cleared
+      setOriginalExpectedCount(0);
     }
   };
 
