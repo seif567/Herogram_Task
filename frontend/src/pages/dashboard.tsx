@@ -123,6 +123,9 @@ export default function DashboardPage() {
         setPaintings(prev => {
           const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
           
+          // Calculate the total expected cards (original placeholders)
+          const totalExpectedCards = prev.length;
+          
           if (placeholderPaintings.length > 0 && res.length > 0) {
             // Sort placeholders by timestamp (oldest first)
             const sortedPlaceholders = placeholderPaintings.sort((a, b) => {
@@ -131,18 +134,39 @@ export default function DashboardPage() {
               return aTimestamp - bTimestamp;
             });
             
-            // Only replace the number of placeholders that correspond to this batch
+            // Calculate how many placeholders to replace
             const placeholdersToReplace = Math.min(res.length, sortedPlaceholders.length);
             const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
             
-            console.log(`fetchPaintingsOnce: Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders`);
+            // Ensure we maintain the total count
+            const result = [...res, ...placeholdersToKeep];
+            console.log(`fetchPaintingsOnce: Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
             
-            return [...res, ...placeholdersToKeep];
+            return result;
           }
           
-          // If we have real paintings but no placeholders, just return real paintings
-          if (res.length > 0) {
-            return res;
+          // If we have real paintings but no placeholders, we need to add placeholders to maintain count
+          if (res.length > 0 && placeholderPaintings.length === 0) {
+            const placeholdersNeeded = Math.max(0, totalExpectedCards - res.length);
+            const additionalPlaceholders = Array.from({ length: placeholdersNeeded }, (_, index) => ({
+              id: `placeholder-maintained-${Date.now()}-${index}`,
+              status: 'pending',
+              summary: 'Waiting for generation...',
+              image_url: null,
+              error_message: null,
+              promptDetails: {
+                summary: 'Waiting for generation...',
+                title: 'Maintaining count',
+                instructions: 'Placeholder to maintain total count',
+                referenceCount: 0,
+                referenceImages: [],
+                fullPrompt: ''
+              }
+            }));
+            
+            const result = [...res, ...additionalPlaceholders];
+            console.log(`fetchPaintingsOnce: Added ${placeholdersNeeded} maintenance placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+            return result;
           }
           
           // If no real paintings, keep existing placeholders
@@ -198,6 +222,9 @@ export default function DashboardPage() {
               const realPaintings = res;
               const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
               
+              // Calculate the total expected cards (original placeholders)
+              const totalExpectedCards = prev.length;
+              
               // If we have real paintings and placeholders, replace only the appropriate number
               if (realPaintings.length > 0 && placeholderPaintings.length > 0) {
                 // Sort placeholders by timestamp (oldest first)
@@ -207,19 +234,40 @@ export default function DashboardPage() {
                   return aTimestamp - bTimestamp;
                 });
                 
-                // Only replace the number of placeholders that correspond to this batch
-                // If we have 3 real paintings and 5 placeholders, keep 2 placeholders
+                // Calculate how many placeholders to replace
+                // We want to maintain the total count, so replace up to the number of real paintings
                 const placeholdersToReplace = Math.min(realPaintings.length, sortedPlaceholders.length);
                 const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
                 
-                console.log(`Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders`);
+                // Ensure we maintain the total count
+                const result = [...realPaintings, ...placeholdersToKeep];
+                console.log(`Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
                 
-                return [...realPaintings, ...placeholdersToKeep];
+                return result;
               }
               
-              // If we have real paintings but no placeholders, just return real paintings
-              if (realPaintings.length > 0) {
-                return realPaintings;
+              // If we have real paintings but no placeholders, we need to add placeholders to maintain count
+              if (realPaintings.length > 0 && placeholderPaintings.length === 0) {
+                const placeholdersNeeded = Math.max(0, totalExpectedCards - realPaintings.length);
+                const additionalPlaceholders = Array.from({ length: placeholdersNeeded }, (_, index) => ({
+                  id: `placeholder-maintained-${Date.now()}-${index}`,
+                  status: 'pending',
+                  summary: 'Waiting for generation...',
+                  image_url: null,
+                  error_message: null,
+                  promptDetails: {
+                    summary: 'Waiting for generation...',
+                    title: 'Maintaining count',
+                    instructions: 'Placeholder to maintain total count',
+                    referenceCount: 0,
+                    referenceImages: [],
+                    fullPrompt: ''
+                  }
+                }));
+                
+                const result = [...realPaintings, ...additionalPlaceholders];
+                console.log(`Added ${placeholdersNeeded} maintenance placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+                return result;
               }
               
               // If no real paintings, keep existing placeholders
