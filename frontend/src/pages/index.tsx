@@ -23,8 +23,7 @@ export default function Home() {
   return (
     <Layout>
       <main className="text-center py-20">
-        <h1 className="text-4xl font-bold mb-4">Herogram Task - Feature + Redis</h1>
-        <p className="text-lg text-gray-600 mb-8">A modern full-stack application with authentication and Redis integration</p>
+        <h1 className="text-4xl font-bold mb-4">Herogram Task</h1>
         <div className="space-x-4">
           <Button onClick={() => router.push('/login')} className="bg-blue-600 hover:bg-blue-700">
             Login
