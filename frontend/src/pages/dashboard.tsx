@@ -25,6 +25,8 @@ export default function DashboardPage() {
 
   // Button press effect state
   const [isButtonPressed, setIsButtonPressed] = useState(false);
+  // Track placeholder cards by generation batch
+  const [placeholderBatches, setPlaceholderBatches] = useState<Array<{count: number, timestamp: number}>>([]);
 
   // left sidebar state
   const [titles, setTitles] = useState<Title[]>([]);
@@ -117,14 +119,23 @@ export default function DashboardPage() {
     try {
       const res = await getPaintings(titleId);
       if (res && res.length > 0) {
-        // Merge real data with existing placeholder cards
+        // Replace placeholders with real data using the same logic as polling
         setPaintings(prev => {
           const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
+          
           if (placeholderPaintings.length > 0 && res.length > 0) {
-            // Keep only placeholders that haven't been replaced yet
-            const remainingPlaceholders = placeholderPaintings.slice(res.length);
-            return [...res, ...remainingPlaceholders];
+            // Sort placeholders by timestamp (oldest first)
+            const sortedPlaceholders = placeholderPaintings.sort((a, b) => {
+              const aTimestamp = parseInt(a.id.toString().split('-')[1]);
+              const bTimestamp = parseInt(b.id.toString().split('-')[1]);
+              return aTimestamp - bTimestamp;
+            });
+            
+            // Replace the oldest placeholders with real paintings
+            const placeholdersToKeep = sortedPlaceholders.slice(res.length);
+            return [...res, ...placeholdersToKeep];
           }
+          
           return res || [];
         });
       } else {
@@ -164,20 +175,27 @@ export default function DashboardPage() {
           const res = await getPaintings(titleId);
           
           if (res && res.length > 0) {
-            // Update paintings by merging real data with existing placeholders
+            // Update paintings by replacing placeholders with real data
             setPaintings(prev => {
               const realPaintings = res;
-              const placeholderPaintings = prev.filter(p => p.id.toString().startsWith('placeholder-'));
+              const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
               
-              // If we have real paintings, merge them with remaining placeholders
-              if (realPaintings.length > 0) {
-                // Keep only placeholders that haven't been replaced yet
-                const remainingPlaceholders = placeholderPaintings.slice(realPaintings.length);
-                return [...realPaintings, ...remainingPlaceholders];
+              // If we have real paintings, replace the oldest placeholders first
+              if (realPaintings.length > 0 && placeholderPaintings.length > 0) {
+                // Sort placeholders by timestamp (oldest first)
+                const sortedPlaceholders = placeholderPaintings.sort((a, b) => {
+                  const aTimestamp = parseInt(a.id.toString().split('-')[1]);
+                  const bTimestamp = parseInt(b.id.toString().split('-')[1]);
+                  return aTimestamp - bTimestamp;
+                });
+                
+                // Replace the oldest placeholders with real paintings
+                const placeholdersToKeep = sortedPlaceholders.slice(realPaintings.length);
+                return [...realPaintings, ...placeholdersToKeep];
               }
               
-              // If no real paintings yet, keep all placeholders
-              return prev;
+              // If no placeholders to replace, just return real paintings
+              return realPaintings;
             });
             
             // Check if all real paintings are completed (ignore placeholders)
@@ -265,8 +283,9 @@ export default function DashboardPage() {
     setTimeout(() => setIsButtonPressed(false), 200); // Reset after 200ms
     
     // Create placeholder cards and add them to existing paintings
+    const batchTimestamp = Date.now();
     const placeholderPaintings = Array.from({ length: numImages }, (_, index) => ({
-      id: `placeholder-${Date.now()}-${index}`,
+      id: `placeholder-${batchTimestamp}-${index}`,
       status: 'pending',
       summary: 'Generating prompt...',
       image_url: null,
@@ -283,6 +302,9 @@ export default function DashboardPage() {
     
     // Add new placeholder cards to existing paintings instead of replacing them
     setPaintings(prev => [...prev, ...placeholderPaintings]);
+    
+    // Track this batch of placeholders
+    setPlaceholderBatches(prev => [...prev, { count: numImages, timestamp: batchTimestamp }]);
   
     try {
       let currentTitleId = activeTitleId;
@@ -308,11 +330,7 @@ export default function DashboardPage() {
       console.log('Generating paintings with references:', refs);
       const res = await generatePaintings(currentTitleId, numImages);
       
-      // Update paintings with real data from API
-      if (res?.paintings && res.paintings.length > 0) {
-        setPaintings(res.paintings);
-      }
-      
+      // Don't replace paintings here - let the polling handle it gradually
       startPolling(currentTitleId);
     } catch (err) {
       console.error('generatePaintings error', err);
