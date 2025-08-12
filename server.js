@@ -13,8 +13,17 @@ const SERVER_PORT = process.env.SERVER_PORT || 3000;
 
 // Middleware
 app.use(cors({
-  origin: '*',          // Allow all origins
-  credentials: false    // Can't use credentials (cookies) with origin '*'
+  origin: [
+    'http://localhost:5000',
+    'http://localhost:3000',
+    'http://161.35.89.78:5000',
+    'http://161.35.89.78:3000',
+    'https://161.35.89.78:5000',
+    'https://161.35.89.78:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));

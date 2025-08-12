@@ -23,8 +23,8 @@ export default function DashboardPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
-  // Loading state
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Button press effect state
+  const [isButtonPressed, setIsButtonPressed] = useState(false);
 
   // left sidebar state
   const [titles, setTitles] = useState<Title[]>([]);
@@ -221,7 +221,9 @@ export default function DashboardPage() {
       return;
     }
     
-    setIsGenerating(true); // start loader
+    // Add button press effect
+    setIsButtonPressed(true);
+    setTimeout(() => setIsButtonPressed(false), 200); // Reset after 200ms
   
     try {
       let currentTitleId = activeTitleId;
@@ -251,8 +253,6 @@ export default function DashboardPage() {
       startPolling(currentTitleId);
     } catch (err) {
       console.error('generatePaintings error', err);
-    } finally {
-      setIsGenerating(false); // stop loader
     }
   }
   
@@ -407,13 +407,12 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={isGenerating}>
-                  {isGenerating && (
-                      <div className="fixed inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center z-50">
-                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                        <p className="mt-4 text-white text-sm">Communicating with server...</p>
-                      </div>
-                    )}
+                <button 
+                  type="submit" 
+                  className={`bg-blue-600 text-white px-4 py-2 rounded transition-all duration-200 ${
+                    isButtonPressed ? 'scale-95 bg-blue-700 shadow-inner' : 'hover:bg-blue-700 hover:shadow-md'
+                  }`}
+                >
                   Generate Paintings
                 </button>
               </div>
@@ -454,10 +453,11 @@ export default function DashboardPage() {
               <div className="mt-6 text-center">
                 <button
                   onClick={handleGenerate}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-                  disabled={isGenerating}
+                  className={`bg-blue-600 text-white px-6 py-3 rounded-lg transition-all duration-200 ${
+                    isButtonPressed ? 'scale-95 bg-blue-700 shadow-inner' : 'hover:bg-blue-700 hover:shadow-md'
+                  }`}
                 >
-                  {isGenerating ? 'Generating...' : 'Generate More Paintings'}
+                  Generate More Paintings
                 </button>
               </div>
             )}
