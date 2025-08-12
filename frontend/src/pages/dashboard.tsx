@@ -553,9 +553,9 @@ export default function DashboardPage() {
         userEmail={user?.email}
       />
 
-      <main className="flex-1 p-6 bg-gray-50 min-h-screen">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl font-bold mb-4">AI Image Generator</h2>
+      <main className="flex-1 p-4 sm:p-6 bg-gray-50 min-h-screen">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">AI Image Generator</h2>
 
           {/* Reference Images */}
           <section className="mb-6 bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
@@ -732,7 +732,7 @@ export default function DashboardPage() {
 
             <PaintGrid>
               {paintings.length === 0 ? (
-                <div className="text-sm text-gray-500 col-span-full">No paintings yet</div>
+                <div className="text-sm text-gray-500 col-span-full text-center py-8">No paintings yet</div>
               ) : (
                 paintings.map((p: any) => (
                     <PaintingCard
