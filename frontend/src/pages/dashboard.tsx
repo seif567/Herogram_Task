@@ -119,7 +119,7 @@ export default function DashboardPage() {
     try {
       const res = await getPaintings(titleId);
       if (res && res.length > 0) {
-        // Replace placeholders with real data using the same logic as polling
+        // Replace placeholders with real data INSTANTLY using the same logic as polling (no visual gap)
         setPaintings(prev => {
           const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
           
@@ -138,9 +138,10 @@ export default function DashboardPage() {
             const placeholdersToReplace = Math.min(res.length, sortedPlaceholders.length);
             const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
             
-            // Ensure we maintain the total count
+            // Create the final array with real paintings first, then remaining placeholders
+            // This ensures instant replacement with no visual gap
             const result = [...res, ...placeholdersToKeep];
-            console.log(`fetchPaintingsOnce: Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+            console.log(`fetchPaintingsOnce: Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
             
             return result;
           }
@@ -217,7 +218,7 @@ export default function DashboardPage() {
           const res = await getPaintings(titleId);
           
           if (res && res.length > 0) {
-            // Update paintings by replacing placeholders with real data
+            // Update paintings by INSTANTLY replacing placeholders with real data (no visual gap)
             setPaintings(prev => {
               const realPaintings = res;
               const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
@@ -235,13 +236,13 @@ export default function DashboardPage() {
                 });
                 
                 // Calculate how many placeholders to replace
-                // We want to maintain the total count, so replace up to the number of real paintings
                 const placeholdersToReplace = Math.min(realPaintings.length, sortedPlaceholders.length);
                 const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
                 
-                // Ensure we maintain the total count
+                // Create the final array with real paintings first, then remaining placeholders
+                // This ensures instant replacement with no visual gap
                 const result = [...realPaintings, ...placeholdersToKeep];
-                console.log(`Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+                console.log(`Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
                 
                 return result;
               }
