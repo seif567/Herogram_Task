@@ -27,6 +27,8 @@ export default function DashboardPage() {
   const [isButtonPressed, setIsButtonPressed] = useState(false);
   // Track placeholder cards by generation batch
   const [placeholderBatches, setPlaceholderBatches] = useState<Array<{count: number, timestamp: number}>>([]);
+  // Store placeholder cards in localStorage for persistence across page reloads
+  const [persistentPlaceholders, setPersistentPlaceholders] = useState<any[]>([]);
 
   // left sidebar state
   const [titles, setTitles] = useState<Title[]>([]);
@@ -105,6 +107,15 @@ export default function DashboardPage() {
         setRefs([]);
       }
 
+      // Load persistent placeholders from localStorage first
+      const storedPlaceholders = loadPlaceholdersFromStorage();
+      
+      // If we have stored placeholders, show them immediately
+      if (storedPlaceholders.length > 0) {
+        setPaintings(storedPlaceholders);
+        console.log(`Restored ${storedPlaceholders.length} placeholder cards from localStorage`);
+      }
+
       await fetchPaintingsOnce(activeTitleId);
       startPolling(activeTitleId);
 
@@ -142,6 +153,14 @@ export default function DashboardPage() {
             // This ensures instant replacement with no visual gap
             const result = [...res, ...placeholdersToKeep];
             console.log(`fetchPaintingsOnce: Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+            
+            // Save remaining placeholders to localStorage
+            if (placeholdersToKeep.length > 0) {
+              savePlaceholdersToStorage(placeholdersToKeep);
+            } else {
+              // If no placeholders left, clear from localStorage
+              clearPlaceholdersFromStorage();
+            }
             
             return result;
           }
@@ -244,6 +263,14 @@ export default function DashboardPage() {
                 const result = [...realPaintings, ...placeholdersToKeep];
                 console.log(`Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
                 
+                // Save remaining placeholders to localStorage
+                if (placeholdersToKeep.length > 0) {
+                  savePlaceholdersToStorage(placeholdersToKeep);
+                } else {
+                  // If no placeholders left, clear from localStorage
+                  clearPlaceholdersFromStorage();
+                }
+                
                 return result;
               }
               
@@ -278,6 +305,8 @@ export default function DashboardPage() {
             // Check if all real paintings are completed (ignore placeholders)
             const realPaintings = res.filter((p: any) => !p.id.toString().startsWith('placeholder-'));
             if (realPaintings.length > 0 && realPaintings.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
+              // Clear placeholders from localStorage since all paintings are complete
+              clearPlaceholdersFromStorage();
               window.clearInterval(id);
               pollingRef.current = null;
               return;
@@ -391,6 +420,11 @@ export default function DashboardPage() {
     setPaintings(prev => {
       const newPaintings = [...prev, ...placeholderPaintings];
       console.log(`Added ${numImages} placeholder cards. Total paintings now: ${newPaintings.length}`);
+      
+      // Save all placeholders to localStorage for persistence
+      const allPlaceholders = newPaintings.filter((p: any) => p.id.toString().startsWith('placeholder-'));
+      savePlaceholdersToStorage(allPlaceholders);
+      
       return newPaintings;
     });
     
@@ -480,6 +514,42 @@ export default function DashboardPage() {
 
   // small helper to render refs as thumbnails
   const refsList = useMemo(() => refs || [], [refs]);
+
+  // Save placeholders to localStorage
+  const savePlaceholdersToStorage = (placeholders: any[]) => {
+    if (typeof window !== 'undefined' && activeTitleId) {
+      const key = `placeholders_${activeTitleId}`;
+      localStorage.setItem(key, JSON.stringify(placeholders));
+    }
+  };
+
+  // Load placeholders from localStorage
+  const loadPlaceholdersFromStorage = () => {
+    if (typeof window !== 'undefined' && activeTitleId) {
+      const key = `placeholders_${activeTitleId}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setPersistentPlaceholders(parsed);
+          console.log(`Loaded ${parsed.length} persistent placeholders for title ${activeTitleId}`);
+          return parsed;
+        } catch (err) {
+          console.error('Error parsing stored placeholders:', err);
+        }
+      }
+    }
+    return [];
+  };
+
+  // Clear placeholders from localStorage when all paintings are complete
+  const clearPlaceholdersFromStorage = () => {
+    if (typeof window !== 'undefined' && activeTitleId) {
+      const key = `placeholders_${activeTitleId}`;
+      localStorage.removeItem(key);
+      setPersistentPlaceholders([]);
+    }
+  };
 
   return (
     <div className="flex">
