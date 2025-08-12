@@ -1,0 +1,476 @@
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import Sidebar from '../components/Sidebar';
+import PaintingCard from '../components/PaintingCard';
+import PaintGrid from '../components/PaintGrid';
+import PaintingDetailsModal from '../components/PaintingDetailsModal';
+import {
+  getTitles,
+  createTitle,
+  getReferences,
+  uploadReference,
+  generatePaintings,
+  getPaintings,
+  retryPainting,
+  regeneratePrompt,
+  getTitle
+} from '../services/api'; // adjust path if necessary
+import { useAuth } from '../contexts/AuthContext';
+import { useRouter } from 'next/router';
+
+type Title = { id: string | number; title: string; instructions?: string; };
+
+export default function DashboardPage() {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  // Loading state
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // left sidebar state
+  const [titles, setTitles] = useState<Title[]>([]);
+  const [activeTitleId, setActiveTitleId] = useState<string | number | null>(null);
+
+  // reference images
+  const [useGlobalRefs, setUseGlobalRefs] = useState<boolean>(false);
+  const [refs, setRefs] = useState<any[]>([]); // array of {id, image_data}
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // form state
+  const [titleInput, setTitleInput] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [numImages, setNumImages] = useState<number>(5);
+
+  // generated paintings state
+  const [paintings, setPaintings] = useState<any[]>([]);
+  const pollingRef = useRef<number | null>(null); // for setInterval id
+  
+  // modal state
+  const [selectedPainting, setSelectedPainting] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // SSE toggle - set to true if your backend supports event streams
+  const USE_SSE = false;
+
+  // --- load titles ---
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getTitles();
+        setTitles(res || []);
+        if ((res || []).length) {
+          // Try to restore the last active title from localStorage
+          const lastActiveTitleId = localStorage.getItem('lastActiveTitleId');
+          let titleToSelect = null;
+          
+          if (lastActiveTitleId && res.find((t: any) => t.id.toString() === lastActiveTitleId)) {
+            // Restore the last active title
+            titleToSelect = parseInt(lastActiveTitleId);
+          } else {
+            // Fallback to the most recent title
+            titleToSelect = res[0].id;
+          }
+          
+          setActiveTitleId(titleToSelect);
+        }
+      } catch (err) {
+        console.error('getTitles error', err);
+      }
+    })();
+  }, []);
+
+  // when active title changes, fetch refs and paintings
+  useEffect(() => {
+    if (!activeTitleId) return;
+    
+    // Save the active title ID to localStorage for persistence
+    localStorage.setItem('lastActiveTitleId', activeTitleId.toString());
+    
+    (async () => {
+      try {
+        const refsRes = await getReferences(activeTitleId);
+        console.log('References fetched:', refsRes);
+        setRefs(refsRes || []);
+      } catch (err) {
+        console.warn('no refs', err);
+        setRefs([]);
+      }
+
+      await fetchPaintingsOnce(activeTitleId);
+      startPolling(activeTitleId);
+
+    })();
+
+    return () => stopPolling();
+  }, [activeTitleId]);
+
+  // fetch paintings once
+  async function fetchPaintingsOnce(titleId: string | number | null) {
+    if (!titleId) return;
+    try {
+      const res = await getPaintings(titleId);
+      setPaintings(res || []);
+    } catch (err) {
+      console.error('getPaintings error', err);
+    }
+  }
+
+  // polling
+  function startPolling(titleId: string | number | null) {
+    if (!titleId) return;
+    stopPolling();
+    if (USE_SSE) {
+      // SSE logic — leave as optional; change endpoint if your backend supports it
+      const ev = new EventSource(`${window.location.origin}/api/paintings/stream?titleId=${titleId}`);
+      ev.onmessage = (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          // expected payload { paintingId, status, imageUrl, prompt, ... }
+          setPaintings((prev) => {
+            const idx = prev.findIndex((p) => p.id === parsed.id);
+            if (idx === -1) return prev;
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], ...parsed };
+            return copy;
+          });
+        } catch (err) {
+          console.warn('SSE parse', err);
+        }
+      };
+      // save eventsource on ref? Not necessary here
+    } else {
+      const id = window.setInterval(async () => {
+        try {
+          const res = await getPaintings(titleId);
+          setPaintings(res || []);
+          
+          // Check if all paintings are completed
+          if (res && res.length > 0 && res.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
+            window.clearInterval(id);
+            pollingRef.current = null;
+            return;
+          }
+        } catch (err) {
+          console.warn('poll error', err);
+        }
+      }, 2000);
+      pollingRef.current = id;
+    }
+  }
+
+  function stopPolling() {
+    if (pollingRef.current) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }
+
+  // create a new title tab (local only, not saved to database yet)
+  function handleNewTitle() {
+    // Clear current inputs and create a new local tab
+    setTitleInput('');
+    setInstructions('');
+    setActiveTitleId(null);
+    setPaintings([]);
+    setRefs([]);
+    
+    // Stop any existing polling
+    stopPolling();
+  }
+
+  // select a title from sidebar
+  async function handleSelectTitle(id: string | number) {
+    setActiveTitleId(id);
+    // optionally load specific title details
+    try {
+      const t = await getTitle(id);
+      setTitleInput(t?.title || '');
+      setInstructions(t?.instructions || '');
+    } catch (_) {}
+  }
+
+  // upload reference image (simple base64 or file)
+  async function handleUploadRef(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f || !activeTitleId) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        const uploadResult = await uploadReference(activeTitleId, base64, useGlobalRefs);
+        console.log('Upload result:', uploadResult);
+        // refresh references
+        const r = await getReferences(activeTitleId);
+        console.log('References after upload:', r);
+        setRefs(r || []);
+      } catch (err) {
+        console.error('uploadReference failed', err);
+      }
+    };
+    reader.readAsDataURL(f);
+    // reset input
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  // generate paintings
+  async function handleGenerate(e?: React.FormEvent) {
+    e?.preventDefault();
+    
+    // Validate title
+    if (!titleInput || titleInput.trim() === '' || titleInput.trim().toLowerCase() === 'untitled') {
+      alert('Please enter a valid title (not "Untitled")');
+      return;
+    }
+    
+    setIsGenerating(true); // start loader
+  
+    try {
+      let currentTitleId = activeTitleId;
+      
+      if (!currentTitleId) {
+        const res = await createTitle(titleInput.trim(), instructions || '');
+        currentTitleId = res?.id || null;
+        setActiveTitleId(currentTitleId);
+        
+        // Refresh the titles list to show the new title in the sidebar
+        try {
+          const updatedTitles = await getTitles();
+          setTitles(updatedTitles || []);
+        } catch (err) {
+          console.error('Failed to refresh titles list:', err);
+        }
+      }
+            
+      if (!currentTitleId) {
+        throw new Error('Failed to get or create title ID');
+      }
+  
+      console.log('Generating paintings with references:', refs);
+      const res = await generatePaintings(currentTitleId, numImages);
+      // The response should have a paintings array
+      setPaintings(res?.paintings || []);
+      startPolling(currentTitleId);
+    } catch (err) {
+      console.error('generatePaintings error', err);
+    } finally {
+      setIsGenerating(false); // stop loader
+    }
+  }
+  
+
+  // retry a painting
+  async function handleRetry(id: string | number) {
+    try {
+      await retryPainting(id);
+      // update UI: set painting status to queued/prompting
+      setPaintings((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'queued' } : p)));
+      startPolling(activeTitleId);
+    } catch (err) {
+      console.error('retry failed', err);
+    }
+  }
+
+  // regenerate prompt for safety violations
+  async function handleRegeneratePrompt(id: string | number) {
+    try {
+      await regeneratePrompt(id);
+      // update UI: set painting status to pending
+      setPaintings((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'pending' } : p)));
+      startPolling(activeTitleId);
+    } catch (err) {
+      console.error('regenerate prompt failed', err);
+    }
+  }
+
+  // modal handlers
+  const handlePaintingClick = (painting: any) => {
+    setSelectedPainting(painting);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedPainting(null);
+  };
+
+  function handleDownload(url?: string | null) {
+    if (!url) return;
+    // open in new tab to trigger download or use fetch blob
+    window.open(url, '_blank');
+  }
+
+  // logout
+  const onLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
+
+  // small helper to render refs as thumbnails
+  const refsList = useMemo(() => refs || [], [refs]);
+
+  return (
+    <div className="flex">
+      <Sidebar
+        titles={titles}
+        activeId={activeTitleId}
+        onSelect={handleSelectTitle}
+        onNew={handleNewTitle}
+        onLogout={onLogout}
+        userEmail={user?.email}
+      />
+
+      <main className="flex-1 p-6 bg-gray-50 min-h-screen">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl font-bold mb-4">AI Image Generator</h2>
+
+          {/* Reference Images */}
+          <section className="mb-6 bg-white p-4 rounded shadow">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Reference Images</h3>
+              <label className="flex items-center gap-2 text-sm">
+                <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2">
+                  <input
+                    type="checkbox"
+                    checked={useGlobalRefs}
+                    onChange={(e) => setUseGlobalRefs(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    useGlobalRefs ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                  <span className={`inline-block h-6 w-11 rounded-full transition-colors ${
+                    useGlobalRefs ? 'bg-blue-600' : 'bg-gray-200'
+                  }`} />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Use global references</span>
+              </label>
+            </div>
+
+            <div className="mt-3 border border-dashed border-gray-200 rounded p-6">
+              <div className="flex flex-col items-center justify-center">
+                <p className="text-sm text-gray-500">Drop reference images here or</p>
+                <div className="mt-3">
+                  <input ref={fileRef} type="file" accept="image/*" onChange={handleUploadRef} />
+                </div>
+              </div>
+
+              <div className="mt-4">
+                {refsList.length === 0 ? (
+                  <p className="text-sm text-gray-400">No reference images uploaded</p>
+                ) : (
+                  <div className="flex gap-2 overflow-auto mt-2">
+                    {refsList.map((r: any) => (
+                      <img key={r.id} src={r.image_data} alt="ref" className="w-28 h-20 object-cover rounded" />
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-gray-500">
+                  {refsList.length > 0 ? `${refsList.length} reference image(s) will be used for generation` : ''}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Create Paintings Form */}
+          <section className="mb-6 bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Create Paintings</h3>
+            <form onSubmit={handleGenerate} className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-600">Title</label>
+                <input
+                  className="w-full mt-1 px-3 py-2 border rounded"
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  placeholder="Enter title (eg. a girl crying)"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Custom Instructions</label>
+                <textarea
+                  className="w-full mt-1 px-3 py-2 border rounded min-h-[100px]"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Make all the images in style of Mona Lisa..."
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Number of Paintings</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={numImages}
+                  onChange={(e) => setNumImages(Number(e.target.value))}
+                  className="w-32 mt-1 px-3 py-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={isGenerating}>
+                  {isGenerating && (
+                      <div className="fixed inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center z-50">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                        <p className="mt-4 text-white text-sm">Communicating with server...</p>
+                      </div>
+                    )}
+                  Generate Paintings
+                </button>
+              </div>
+            </form>
+          </section>
+
+          {/* Generated Paintings */}
+          <section className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-4">Generated Paintings</h3>
+
+            <PaintGrid>
+              {paintings.length === 0 ? (
+                <div className="text-sm text-gray-500 col-span-full">No paintings yet</div>
+              ) : (
+                paintings.map((p: any) => (
+                    <PaintingCard
+                      key={p.id}
+                      painting={{
+                        id: p.id,
+                        prompt: p.summary, // Backend returns 'summary' not 'prompt'
+                        status: p.status,
+                        imageUrl: p.image_url, // Backend returns 'image_url' not 'imageUrl'
+                        error: p.error_message, // Backend returns 'error_message' not 'error'
+                        summary: p.summary,
+                        promptDetails: p.promptDetails
+                      }}
+                      onRetry={handleRetry}
+                      onRegeneratePrompt={handleRegeneratePrompt}
+                      onDownload={handleDownload}
+                      onClick={() => handlePaintingClick(p)}
+                    />
+                  ))
+              )}
+            </PaintGrid>
+            
+            {/* Generate More Paintings Button */}
+            {paintings.length > 0 && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={handleGenerate}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate More Paintings'}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+      
+      {/* Painting Details Modal */}
+      <PaintingDetailsModal
+        painting={selectedPainting}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
+    </div>
+  );
+}
