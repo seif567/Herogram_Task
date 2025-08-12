@@ -70,6 +70,7 @@ export default function DashboardPage() {
             titleToSelect = res[0].id;
           }
           
+          // Set the active title ID - this will trigger the useEffect that loads title details
           setActiveTitleId(titleToSelect);
         }
       } catch (err) {
@@ -87,11 +88,18 @@ export default function DashboardPage() {
     
     (async () => {
       try {
+        // Load title details (title and instructions) into form fields
+        const titleDetails = await getTitle(activeTitleId);
+        if (titleDetails) {
+          setTitleInput(titleDetails.title || '');
+          setInstructions(titleDetails.instructions || '');
+        }
+        
         const refsRes = await getReferences(activeTitleId);
         console.log('References fetched:', refsRes);
         setRefs(refsRes || []);
       } catch (err) {
-        console.warn('no refs', err);
+        console.warn('Error loading title details or refs:', err);
         setRefs([]);
       }
 
@@ -109,12 +117,13 @@ export default function DashboardPage() {
     try {
       const res = await getPaintings(titleId);
       if (res && res.length > 0) {
-        // Replace any placeholder cards with real data
+        // Merge real data with existing placeholder cards
         setPaintings(prev => {
-          const placeholderPaintings = prev.filter(p => p.id.toString().startsWith('placeholder-'));
+          const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
           if (placeholderPaintings.length > 0 && res.length > 0) {
-            // Replace placeholders with real data
-            return res;
+            // Keep only placeholders that haven't been replaced yet
+            const remainingPlaceholders = placeholderPaintings.slice(res.length);
+            return [...res, ...remainingPlaceholders];
           }
           return res || [];
         });
@@ -155,22 +164,25 @@ export default function DashboardPage() {
           const res = await getPaintings(titleId);
           
           if (res && res.length > 0) {
-            // Replace placeholder cards with real data
+            // Update paintings by merging real data with existing placeholders
             setPaintings(prev => {
               const realPaintings = res;
               const placeholderPaintings = prev.filter(p => p.id.toString().startsWith('placeholder-'));
               
-              // If we have real paintings, replace placeholders
+              // If we have real paintings, merge them with remaining placeholders
               if (realPaintings.length > 0) {
-                return realPaintings;
+                // Keep only placeholders that haven't been replaced yet
+                const remainingPlaceholders = placeholderPaintings.slice(realPaintings.length);
+                return [...realPaintings, ...remainingPlaceholders];
               }
               
-              // If no real paintings yet, keep placeholders
+              // If no real paintings yet, keep all placeholders
               return prev;
             });
             
-            // Check if all paintings are completed
-            if (res.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
+            // Check if all real paintings are completed (ignore placeholders)
+            const realPaintings = res.filter((p: any) => !p.id.toString().startsWith('placeholder-'));
+            if (realPaintings.length > 0 && realPaintings.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
               window.clearInterval(id);
               pollingRef.current = null;
               return;
@@ -252,7 +264,7 @@ export default function DashboardPage() {
     setIsButtonPressed(true);
     setTimeout(() => setIsButtonPressed(false), 200); // Reset after 200ms
     
-    // Immediately create placeholder cards to show generation is working
+    // Create placeholder cards and add them to existing paintings
     const placeholderPaintings = Array.from({ length: numImages }, (_, index) => ({
       id: `placeholder-${Date.now()}-${index}`,
       status: 'pending',
@@ -269,7 +281,8 @@ export default function DashboardPage() {
       }
     }));
     
-    setPaintings(placeholderPaintings);
+    // Add new placeholder cards to existing paintings instead of replacing them
+    setPaintings(prev => [...prev, ...placeholderPaintings]);
   
     try {
       let currentTitleId = activeTitleId;
@@ -534,14 +547,13 @@ export default function DashboardPage() {
                       // Start the actual generation
                       generatePaintings(activeTitleId, numImages)
                         .then(() => {
-                          // Refresh paintings to get real data
-                          fetchPaintingsOnce(activeTitleId);
+                          // Start polling to get real data as it comes in
                           startPolling(activeTitleId);
                         })
                         .catch(err => {
                           console.error('generatePaintings error', err);
-                          // Remove placeholder cards on error
-                          setPaintings(prev => prev.filter(p => !p.id.toString().startsWith('placeholder-')));
+                          // Remove only the placeholder cards that were just added
+                          setPaintings(prev => prev.filter((p: any) => !p.id.toString().startsWith('placeholder-')));
                         });
                     }
                   }}
