@@ -108,7 +108,19 @@ export default function DashboardPage() {
     if (!titleId) return;
     try {
       const res = await getPaintings(titleId);
-      setPaintings(res || []);
+      if (res && res.length > 0) {
+        // Replace any placeholder cards with real data
+        setPaintings(prev => {
+          const placeholderPaintings = prev.filter(p => p.id.toString().startsWith('placeholder-'));
+          if (placeholderPaintings.length > 0 && res.length > 0) {
+            // Replace placeholders with real data
+            return res;
+          }
+          return res || [];
+        });
+      } else {
+        setPaintings(res || []);
+      }
     } catch (err) {
       console.error('getPaintings error', err);
     }
@@ -141,13 +153,28 @@ export default function DashboardPage() {
       const id = window.setInterval(async () => {
         try {
           const res = await getPaintings(titleId);
-          setPaintings(res || []);
           
-          // Check if all paintings are completed
-          if (res && res.length > 0 && res.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
-            window.clearInterval(id);
-            pollingRef.current = null;
-            return;
+          if (res && res.length > 0) {
+            // Replace placeholder cards with real data
+            setPaintings(prev => {
+              const realPaintings = res;
+              const placeholderPaintings = prev.filter(p => p.id.toString().startsWith('placeholder-'));
+              
+              // If we have real paintings, replace placeholders
+              if (realPaintings.length > 0) {
+                return realPaintings;
+              }
+              
+              // If no real paintings yet, keep placeholders
+              return prev;
+            });
+            
+            // Check if all paintings are completed
+            if (res.every((painting: any) => painting.status === 'completed' || painting.status === 'failed')) {
+              window.clearInterval(id);
+              pollingRef.current = null;
+              return;
+            }
           }
         } catch (err) {
           console.warn('poll error', err);
@@ -224,6 +251,25 @@ export default function DashboardPage() {
     // Add button press effect
     setIsButtonPressed(true);
     setTimeout(() => setIsButtonPressed(false), 200); // Reset after 200ms
+    
+    // Immediately create placeholder cards to show generation is working
+    const placeholderPaintings = Array.from({ length: numImages }, (_, index) => ({
+      id: `placeholder-${Date.now()}-${index}`,
+      status: 'pending',
+      summary: 'Generating prompt...',
+      image_url: null,
+      error_message: null,
+      promptDetails: {
+        summary: 'Generating prompt...',
+        title: titleInput.trim(),
+        instructions: instructions || 'No custom instructions provided',
+        referenceCount: refs.length,
+        referenceImages: [],
+        fullPrompt: ''
+      }
+    }));
+    
+    setPaintings(placeholderPaintings);
   
     try {
       let currentTitleId = activeTitleId;
@@ -248,11 +294,17 @@ export default function DashboardPage() {
   
       console.log('Generating paintings with references:', refs);
       const res = await generatePaintings(currentTitleId, numImages);
-      // The response should have a paintings array
-      setPaintings(res?.paintings || []);
+      
+      // Update paintings with real data from API
+      if (res?.paintings && res.paintings.length > 0) {
+        setPaintings(res.paintings);
+      }
+      
       startPolling(currentTitleId);
     } catch (err) {
       console.error('generatePaintings error', err);
+      // If there's an error, remove placeholder cards
+      setPaintings([]);
     }
   }
   
@@ -452,7 +504,47 @@ export default function DashboardPage() {
             {paintings.length > 0 && (
               <div className="mt-6 text-center">
                 <button
-                  onClick={handleGenerate}
+                  onClick={() => {
+                    // For "Generate More", we don't need to create new title
+                    if (activeTitleId) {
+                      // Add button press effect
+                      setIsButtonPressed(true);
+                      setTimeout(() => setIsButtonPressed(false), 200);
+                      
+                      // Create placeholder cards for additional paintings
+                      const additionalPlaceholders = Array.from({ length: numImages }, (_, index) => ({
+                        id: `placeholder-${Date.now()}-${index}`,
+                        status: 'pending',
+                        summary: 'Generating prompt...',
+                        image_url: null,
+                        error_message: null,
+                        promptDetails: {
+                          summary: 'Generating prompt...',
+                          title: titleInput.trim() || 'Current Title',
+                          instructions: instructions || 'No custom instructions provided',
+                          referenceCount: refs.length,
+                          referenceImages: [],
+                          fullPrompt: ''
+                        }
+                      }));
+                      
+                      // Add new placeholders to existing paintings
+                      setPaintings(prev => [...prev, ...additionalPlaceholders]);
+                      
+                      // Start the actual generation
+                      generatePaintings(activeTitleId, numImages)
+                        .then(() => {
+                          // Refresh paintings to get real data
+                          fetchPaintingsOnce(activeTitleId);
+                          startPolling(activeTitleId);
+                        })
+                        .catch(err => {
+                          console.error('generatePaintings error', err);
+                          // Remove placeholder cards on error
+                          setPaintings(prev => prev.filter(p => !p.id.toString().startsWith('placeholder-')));
+                        });
+                    }
+                  }}
                   className={`bg-blue-600 text-white px-6 py-3 rounded-lg transition-all duration-200 ${
                     isButtonPressed ? 'scale-95 bg-blue-700 shadow-inner' : 'hover:bg-blue-700 hover:shadow-md'
                   }`}
