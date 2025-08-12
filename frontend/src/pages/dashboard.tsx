@@ -131,8 +131,10 @@ export default function DashboardPage() {
               return aTimestamp - bTimestamp;
             });
             
-            // Replace the oldest placeholders with real paintings
-            const placeholdersToKeep = sortedPlaceholders.slice(res.length);
+            // Only replace the number of placeholders that correspond to this batch
+            const placeholdersToReplace = Math.min(res.length, sortedPlaceholders.length);
+            const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
+                        
             return [...res, ...placeholdersToKeep];
           }
           
@@ -180,7 +182,7 @@ export default function DashboardPage() {
               const realPaintings = res;
               const placeholderPaintings = prev.filter((p: any) => p.id.toString().startsWith('placeholder-'));
               
-              // If we have real paintings, replace the oldest placeholders first
+              // If we have real paintings and placeholders, replace only the appropriate number
               if (realPaintings.length > 0 && placeholderPaintings.length > 0) {
                 // Sort placeholders by timestamp (oldest first)
                 const sortedPlaceholders = placeholderPaintings.sort((a, b) => {
@@ -189,8 +191,13 @@ export default function DashboardPage() {
                   return aTimestamp - bTimestamp;
                 });
                 
-                // Replace the oldest placeholders with real paintings
-                const placeholdersToKeep = sortedPlaceholders.slice(realPaintings.length);
+                // Only replace the number of placeholders that correspond to this batch
+                // If we have 3 real paintings and 5 placeholders, keep 2 placeholders
+                const placeholdersToReplace = Math.min(realPaintings.length, sortedPlaceholders.length);
+                const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
+                
+                console.log(`Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders`);
+                
                 return [...realPaintings, ...placeholdersToKeep];
               }
               
@@ -301,7 +308,11 @@ export default function DashboardPage() {
     }));
     
     // Add new placeholder cards to existing paintings instead of replacing them
-    setPaintings(prev => [...prev, ...placeholderPaintings]);
+    setPaintings(prev => {
+      const newPaintings = [...prev, ...placeholderPaintings];
+      console.log(`Added ${numImages} placeholder cards. Total paintings now: ${newPaintings.length}`);
+      return newPaintings;
+    });
     
     // Track this batch of placeholders
     setPlaceholderBatches(prev => [...prev, { count: numImages, timestamp: batchTimestamp }]);
