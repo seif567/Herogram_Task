@@ -145,21 +145,30 @@ export default function DashboardPage() {
               return aTimestamp - bTimestamp;
             });
             
-            // Calculate how many placeholders to replace
+            // IMPORTANT: Only replace the exact number of placeholders that correspond to returned paintings
+            // If API returns 1 painting, only replace 1 placeholder, keep the rest
             const placeholdersToReplace = Math.min(res.length, sortedPlaceholders.length);
+            
+            // Safety check: ensure we don't replace more placeholders than we have
+            if (placeholdersToReplace > sortedPlaceholders.length) {
+              console.warn(`fetchPaintingsOnce: Warning: API returned ${res.length} paintings but only ${sortedPlaceholders.length} placeholders exist. Adjusting replacement count.`);
+            }
+            
             const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
             
-            // Create the final array with real paintings first, then remaining placeholders
-            // This ensures instant replacement with no visual gap
+            // Create the final array: real paintings + remaining placeholders
             const result = [...res, ...placeholdersToKeep];
-            console.log(`fetchPaintingsOnce: Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+            
+            console.log(`fetchPaintingsOnce: API returned ${res.length} paintings. Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
             
             // Save remaining placeholders to localStorage
             if (placeholdersToKeep.length > 0) {
               savePlaceholdersToStorage(placeholdersToKeep);
+              console.log(`fetchPaintingsOnce: Saved ${placeholdersToKeep.length} remaining placeholders to localStorage`);
             } else {
               // If no placeholders left, clear from localStorage
               clearPlaceholdersFromStorage();
+              console.log('fetchPaintingsOnce: No placeholders remaining, cleared from localStorage');
             }
             
             return result;
@@ -254,21 +263,30 @@ export default function DashboardPage() {
                   return aTimestamp - bTimestamp;
                 });
                 
-                // Calculate how many placeholders to replace
+                // IMPORTANT: Only replace the exact number of placeholders that correspond to returned paintings
+                // If API returns 1 painting, only replace 1 placeholder, keep the rest
                 const placeholdersToReplace = Math.min(realPaintings.length, sortedPlaceholders.length);
+                
+                // Safety check: ensure we don't replace more placeholders than we have
+                if (placeholdersToReplace > sortedPlaceholders.length) {
+                  console.warn(`Warning: API returned ${realPaintings.length} paintings but only ${sortedPlaceholders.length} placeholders exist. Adjusting replacement count.`);
+                }
+                
                 const placeholdersToKeep = sortedPlaceholders.slice(placeholdersToReplace);
                 
-                // Create the final array with real paintings first, then remaining placeholders
-                // This ensures instant replacement with no visual gap
+                // Create the final array: real paintings + remaining placeholders
                 const result = [...realPaintings, ...placeholdersToKeep];
-                console.log(`Instantly replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
+                
+                console.log(`API returned ${realPaintings.length} paintings. Replacing ${placeholdersToReplace} placeholders, keeping ${placeholdersToKeep.length} placeholders. Total cards: ${result.length} (expected: ${totalExpectedCards})`);
                 
                 // Save remaining placeholders to localStorage
                 if (placeholdersToKeep.length > 0) {
                   savePlaceholdersToStorage(placeholdersToKeep);
+                  console.log(`Saved ${placeholdersToKeep.length} remaining placeholders to localStorage`);
                 } else {
                   // If no placeholders left, clear from localStorage
                   clearPlaceholdersFromStorage();
+                  console.log('No placeholders remaining, cleared from localStorage');
                 }
                 
                 return result;
